@@ -1,9 +1,8 @@
 MAP
+	EXTENT -10000000000 -10000000000 10000000000 10000000000
 	TRANSPARENT ON
-
 	MAXSIZE 10000
 	SHAPEPATH "[SHAPEPATH]"
-
 	OUTPUTFORMAT
 		NAME 'agg/png'
 		DRIVER AGG/PNG
@@ -11,15 +10,14 @@ MAP
 		FORMATOPTION "TRANSPARENT=TRUE"
 		MIMETYPE 'image/png'
 	END
-
 	IMAGETYPE agg/png
-
 	WEB
 		METADATA
 			'ows_enable_request' '*'
+			'ows_title' 'Selection Service'
+            'ows_srs' '[MAP_PROJECTION]'
 		END
 	END
-
 	SYMBOL
 		NAME 'CIRCLE'
 		TYPE ELLIPSE
@@ -28,56 +26,113 @@ MAP
 		END
 		FILLED TRUE
 	END
-
 	PROJECTION
-		'+init=[PROJECTION]'
+		'+init=[MAP_PROJECTION]'
 	END
-
 	LAYER
-		TYPE [LAYER_TYPE]
+		EXTENT -10000000000 -10000000000 10000000000 10000000000
+		TYPE POINT
 		STATUS DEFAULT
-		NAME 'selected'
+		NAME 'selectedPoint'
 		GROUP 'highlight'
 		CONNECTIONTYPE OGR
 		CONNECTION '[SHAPEPATH]/[UNIQUEID].db' 
-		DATA 'features'
-
+		METADATA
+            'ows_title' 'Selected Point Features'
+            'gml_featureid' 'pid'
+            'gml_include_items' 'all'
+        END
+        PROJECTION
+            '+init=[MAP_PROJECTION]'
+        END
+		DATA 'featurespoint'
 		CLASS
 			STYLE
-				OUTLINECOLOR 255 255 0
+				OUTLINECOLOR 0 255 255
 				SIZE 3
 				SYMBOL 'circle'
 			END
 		END
 	END
-
 	LAYER
+		EXTENT -10000000000 -10000000000 10000000000 10000000000
+		TYPE LINE
+		STATUS DEFAULT
+		NAME 'selectedLine'
+		GROUP 'highlight'
+		CONNECTIONTYPE OGR
+		CONNECTION '[SHAPEPATH]/[UNIQUEID].db' 
+		METADATA
+            'ows_title' 'Selected Line Features'
+            'gml_featureid' 'pid'
+            'gml_include_items' 'all'
+        END
+        PROJECTION
+            '+init=[MAP_PROJECTION]'
+        END
+		DATA 'featuresline'
+		CLASS
+			STYLE
+				COLOR 0 255 255
+				WIDTH 3
+			END
+		END
+	END
+	LAYER
+		EXTENT -10000000000 -10000000000 10000000000 10000000000
 		TYPE POLYGON
+		STATUS DEFAULT
+		NAME 'selectedPoly'
+		GROUP 'highlight'
+		CONNECTIONTYPE OGR
+		CONNECTION '[SHAPEPATH]/[UNIQUEID].db' 
+		METADATA
+            'ows_title' 'Selected Polygon Features'
+            'gml_featureid' 'pid'
+            'gml_include_items' 'all'
+        END
+        PROJECTION
+            '+init=[MAP_PROJECTION]'
+        END
+		DATA 'featurespolygon'
+		CLASS
+			STYLE
+				OUTLINECOLOR 0 255 255
+				SIZE 3
+			END
+		END
+	END
+	LAYER
+		EXTENT -10000000000 -10000000000 10000000000 10000000000
+		TYPE [INPUTTYPE]
 		STATUS DEFAULT
 		NAME 'selected_with_features'
 		GROUP 'highlight'
 		CONNECTIONTYPE OGR
-		CONNECTION '[SHAPEPATH]/[UNIQUEID].db' 
-		DATA 'selection'
-
-		CLASSITEM AREA
-
+		[CONNECTION]    
+		METADATA
+            'ows_title' 'Selection'
+            'gml_featureid' 'area'
+            'gml_include_items' 'all'
+        END
+      	PROJECTION
+            '+init=[MAP_PROJECTION]'
+        END
+		[DATA]
+		CLASSITEM area
 		CLASS
-			EXPRESSION "DRAWN"
+			EXPRESSION 'DRAWN'
 			STYLE
-				OUTLINECOLOR '#F25FFF'
-				WIDTH 4
+				OUTLINECOLOR '#ee9900'
+				WIDTH 6
 			END
 		END
-
 		CLASS
-			EXPRESSION "QUERY"
+			EXPRESSION 'QUERY'
 			STYLE
-				OUTLINECOLOR '#FF8120'
+				OUTLINECOLOR '#ee9900'
 				WIDTH 6
 			END
 		END
 	END
-
-
 END

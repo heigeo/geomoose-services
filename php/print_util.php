@@ -283,41 +283,70 @@ function renderVector($layer,$mapW,$mapH,$extent) {
 			# add a label as necessary
 			if($features[$i]['style']['label']) {
 				$layer_string .= "\n".'TEXT "'.$features[$i]['style']['label'].'"';
-				$layer_string .= "\nLABEL\nPOSITION CC\nTYPE TRUETYPE\nFONT 'vera_sans'\nSIZE 10\nCOLOR 0 0 0\nEND";
+				$layer_string .= "\nLABEL\nPOSITION CC\nTYPE TRUETYPE\nFONT '" . $features[$i]['style']['fontFamily'] . "'\nSIZE " . $features[$i]['style']['fontSize'] . "\nCOLOR '" . $features[$i]['style']['fontColor'] . "'\nEND";
 			}
 
 			# start a style
 			# do the fill style
-			foreach(array('fill','stroke') as $prefix) {
+			if ($layer_type == 'POINT') {
 				$layer_string .= "\nSTYLE";
-				$outline_width_set = false;
-				foreach($features[$i]['style'] as $k=>$v) {
-					switch($k) {
-						case 'fillColor':
-							if($prefix == 'fill') {
-								$layer_string .= "\nCOLOR \"".colorToHex(translateColor($v))."\"";
-							}
-							break;
-						case $prefix.'Opacity':
-							$layer_string .= "\nOPACITY ". (floatval($v) * 100);
-							break;
-						case 'strokeColor':
-							if($prefix == 'stroke') {
-								$layer_string .= "\nOUTLINECOLOR \"".colorToHex(translateColor($v))."\"";
-								if($outline_width_set == false) {
-									$layer_string .= "\nWIDTH 4";
-								}
-							}
-							break;
-						case $prefix.'Width':
-							$layer_string .= "\nWIDTH ".$v;
-							$outline_width_set = true;
-							break;
-					}
-				}
-
-				# close the style
+				$layer_string .= "\nSIZE ".((int)$features[$i]['style']['pointRadius'] * 2);
+				$layer_string .= "\nSYMBOL '" . $features[$i]['style']['graphicName'] . "'";
+				$layer_string .= "\nOUTLINECOLOR \"".colorToHex(translateColor($features[$i]['style']['strokeColor']))."\"";
+				$layer_string .= "\nCOLOR \"".colorToHex(translateColor($features[$i]['style']['fillColor']))."\"";
+				$layer_string .= "\nWIDTH ".$features[$i]['style']['strokeWidth'];
+				$layer_string .= "\nOPACITY ". (floatval($features[$i]['style']['fillOpacity']) * 100);
 				$layer_string .= "\nEND";
+			}
+			else if ($layer_type == 'LINE') {
+				$layer_string .= "\nSTYLE";
+				$layer_string .= "\nOUTLINECOLOR \"".colorToHex(translateColor($features[$i]['style']['strokeColor']))."\"";
+				$layer_string .= "\nOPACITY ". (floatval($features[$i]['style']['strokeOpacity']) * 100);
+				$layer_string .= "\nWIDTH ".$features[$i]['style']['strokeWidth'];
+				$strokeWidth = (int)$features[$i]['style']['strokeWidth'];
+				if ($features[$i]['style']['strokeDashstyle'] == "dot")
+					$layer_string .= "\nPATTERN " . ($strokeWidth / 4) . " " . ($strokeWidth * 4) . " END";
+				else if ($features[$i]['style']['strokeDashstyle'] == "dash")
+					$layer_string .= "\nPATTERN " . ($strokeWidth * 4) . " " . ($strokeWidth * 2) . " END";
+				else if ($features[$i]['style']['strokeDashstyle'] == "dashdot")
+					$layer_string .= "\nPATTERN " . ($strokeWidth * 4) . " " . ($strokeWidth * 4) . " " . ($strokeWidth / 4) . " " . ($strokeWidth * 4) . " END";
+				else if ($features[$i]['style']['strokeDashstyle'] == "longdash")
+					$layer_string .= "\nPATTERN " . ($strokeWidth * 8) . " " . ($strokeWidth * 2) . " END";
+				else if ($features[$i]['style']['strokeDashstyle'] == "longdashdot")
+					$layer_string .= "\nPATTERN " . ($strokeWidth * 8) . " " . ($strokeWidth * 4) . " " . ($strokeWidth / 4) . " " . ($strokeWidth * 4) . " END";
+				$layer_string .= "\nEND";
+			} else if ($layer_type == 'POLYGON') {
+				foreach(array('fill','stroke') as $prefix) {
+					$layer_string .= "\nSTYLE";
+					$outline_width_set = false;
+					foreach($features[$i]['style'] as $k=>$v) {
+						switch($k) {
+							case 'fillColor':
+								if($prefix == 'fill') {
+									$layer_string .= "\nCOLOR \"".colorToHex(translateColor($v))."\"";
+								}
+								break;
+							case $prefix.'Opacity':
+								$layer_string .= "\nOPACITY ". (floatval($v) * 100);
+								break;
+							case 'strokeColor':
+								if($prefix == 'stroke') {
+									$layer_string .= "\nOUTLINECOLOR \"".colorToHex(translateColor($v))."\"";
+									if($outline_width_set == false) {
+										$layer_string .= "\nWIDTH 4";
+									}
+								}
+								break;
+							case $prefix.'Width':
+								$layer_string .= "\nWIDTH ".$v;
+								$outline_width_set = true;
+								break;
+						}
+					}
+					
+					# close the style
+					$layer_string .= "\nEND";
+				}
 			}
 
 

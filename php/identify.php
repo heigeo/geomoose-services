@@ -1,5 +1,4 @@
 <?php
-SCRATCH
 /*Copyright (c) 2009, Dan "Ducky" Little & GeoMOOSE.org
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,40 +18,33 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.*/
-
 /*
  * File: identify.php
  * Provides drill-down identify functionality.
  */
 
-include('config.php');
+include('output.php');
 
-# Debug flag.
-$DEBUG = false;
+# Get the Query Shape
+$shape = get_request_icase('shape');
 
-if(!$DEBUG) {
-	# Turn off the warning reporting in production
-	error_reporting(E_ERROR | E_PARSE);
+# Set up the list of potential layers to identify
+if (get_request_icase('visible_layers') != "") {
+	$visibleLayers = get_request_icase('visible_layers');
+} else {
+	$visibleLayers = get_request_icase('layers');
 }
 
-
-$projection = $CONFIGURATION['projection'];
-if(array_key_exists('projection', $_REQUEST) and isset($_REQUEST['projection'])) {
-	$projection = urldecode($_REQUEST['projection']);
-}
-
-$shape = urldecode($_REQUEST['shape']);
-
-$visibleLayers = urldecode($_REQUEST['layers']);
-$hiddenLayers = urldecode($_REQUEST['hidden_layers']);
-
+$hiddenLayers = get_request_icase('hidden_layers');
 $layersList = explode(':', $visibleLayers);
 $layersList = array_merge($layersList, explode(':', $hiddenLayers));
 $layersList = array_unique($layersList);
 
+# Load the mapbook
 $mapbook = getMapbook();
 $msXML = $mapbook->getElementsByTagName('map-source');
 
+#Figure out the exact layers to identify
 $layersToIdentify = array();
 for($i = 0; $i < $msXML->length; $i++) {
 	$node = $msXML->item($i);
@@ -96,31 +88,23 @@ for($i = 0; $i < $msXML->length; $i++) {
 		}
 	}
 }
-
 # Setup the Query Shape
 $queryShape = ms_shapeObjFromWkt($shape);
-
-# Generate the HTML from the Identify Function
-$substArray = array();
 $content = '';
 
+#Set Lat/Lon
 if($queryShape->type == MS_SHAPE_POINT) {
 	$point = $queryShape->line(0)->point(0);
-	$substArray['mapx'] = $point->x;
-	$substArray['mapy'] = $point->y;
 } else {
 	$point = $queryShape->getCentroid();
-	$substArray['mapx'] = $point->x;
-	$substArray['mapy'] = $point->y;
 }
-
-
-
+	
 # Needed WMS Information
 $wmsBBOX = ($point->x - 100). ',' . ($point->y - 100) . ',' . ($point->x + 100) . ',' . ($point->y + 100);
 $wmsHeaderTemplate = implode('', file($CONFIGURATION['wms_header']));
 $wmsRecordTemplate = implode('', file($CONFIGURATION['wms_record']));
 $wmsFooterTemplate = implode('', file($CONFIGURATION['wms_footer']));
+$foundShapes = array();
 
 foreach($layersToIdentify as $mf) {
 	$info = explode(':', $mf);
@@ -129,7 +113,7 @@ foreach($layersToIdentify as $mf) {
 		if(substr($path,0,1) == '.') {
 			$path = $CONFIGURATION['root'].$path;
 		}
-		$map = ms_newMapObj($path);
+		$map = ms_newMapObj($path);		
 		$q_shape = NULL;
 		# This makes a slightly dangerous assumption, that if
 		# you defined a map projection, the rest of the layers match.
@@ -137,8 +121,8 @@ foreach($layersToIdentify as $mf) {
 		# over <= 2.4 because before we ignored projection issues altogether.
 		$map_proj = $map->getProjection();
 		if($DEBUG) {
-			error_log("Map Projection: ".$map_proj);
-			error_log("Input Projection: ".$projection);
+			print_r("Map Projection: ".$map_proj);
+			print_r("Input Projection: ".$projection);
 		}
 		if($map_proj != NULL) {
 			# turn it into a real projection object.
@@ -149,40 +133,48 @@ foreach($layersToIdentify as $mf) {
 			# using "reprojectWKT" from config.php
 			$q_shape = ms_shapeObjFromWkt(reprojectWKT($queryShape->toWkt(), $shape_proj, $map_proj)); 
 			if($DEBUG) {
-				error_log('Input WKT: '.$queryShape->toWkt());
-				error_log('Projected WKT: '.$q_shape->toWkt());
+				print_r('Input WKT: '.$queryShape->toWkt());
+				print_r('Projected WKT: '.$q_shape->toWkt());
 			}
 		} else {
 			$q_shape = $queryShape;
 		}
-
-		for($i = 0; $i < $map->numlayers; $i++) {
-			$layer = $map->getLayer($i);
+		
+		for($j = 0; $j < $map->numlayers; $j++) {
+			$layer = $map->getLayer($j);
 			if($info[1] == 'all' || $info[1] == $layer->name) {
+				$layer->set('template', $layer->getMetadata('identify_record'));
 				$layer->set('status', MS_DEFAULT);
-				$layer->set('template', $layer->getMetaData('identify_record'));
-
+				$layer->open();
+				
 				$max_features = $layer->getMetaData('identify_max_features');
-				if($max_features) {
+				if($max_features)
 					$layer->set('maxfeatures', $max_features);
+				
+				if($queryShape->type == MS_SHAPE_POINT) {
+					$pointIn = $q_shape->line(0)->point(0);
+					$layer->queryByPoint($pointIn, MS_MULTIPLE, -1);
+				} else {
+					$layer->queryByShape($q_shape);
 				}
-			} else {
-				$layer->set('status', MS_OFF);
+				$content = $content . $map->processQueryTemplate(array(), false);
+				
+				$selectMap = explode("/", str_replace("./","",$path), -1);
+				$selectMap = implode("/", $selectMap);
+				$template = implode('', file($selectMap . "/" . $layer->getMetadata('identify_record')));
+
+				for ($i = 0; $i < ($layer->getNumResults()); $i++) {
+					$shapeLayer = $layer->getShape($layer->getResult($i));
+					if($map_proj != NULL)
+						$shapeLayer->project($map_proj, ms_newprojectionobj($projection));
+					$shapeLayer->set("text", $i);
+					$foundShapes[] = $shapeLayer;
+					$content = internalIdTemplate($content, $i, $template);
+				}
 			}
 		}
-		if($queryShape->type == MS_SHAPE_POINT) {
-			$point = $q_shape->line(0)->point(0);
-			$map->queryByPoint($point, MS_MULTIPLE, -1);
-			$substArray['mapx'] = $point->x;
-			$substArray['mapy'] = $point->y;
-		} else {
-			$map->queryByShape($q_shape);
-		}
-		$results = $map->processquerytemplate(array(), false);
-		$content = $content . $results;
 	} else if($info[0] == 'wms') {
 		$wmsUrl = $info[2].'&SERVICE=WMS&VERSION=1.1.0&REQUEST=GetFeatureInfo&WIDTH=100&HEIGHT=100&X=50&Y=50&EXCEPTIONS=application/vnd.ogc.se_xml&LAYERS='.$info[1].'&QUERY_LAYERS='.$info[1].'&BBOX='.$wmsBBOX.'&SRS='.$projection.'&STYLES=&INFO_FORMAT=application/vnd.ogc.gml';
-		#print '<a href="'.$wmsUrl.'"> WMS Link</a><br/>';
 
 		# Resolve the url if relative
 		$firstCh = substr($wmsUrl, 0, 1);
@@ -234,23 +226,54 @@ foreach($layersToIdentify as $mf) {
 	}
 }
 
+# Array to hold values needed inside output and map file
+$dict = array();
+$dict['UNIQUEID'] = 'select_'.getmypid().time();
+$dict['SHAPE_WKT'] = $shape;
+$dict['SHAPEPATH'] = $CONFIGURATION['temp'];
+$dict['MAP_PROJECTION'] = $projection; 
+$dict['PROJECTION'] = 'EPSG:4326'; 
+$dict['foundShapes'] = sizeof($foundShapes);
+
+if ($CONFIGURATION['use_latlong']) {
+	$clonePoint = $point;
+	$projOutObj = ms_newprojectionobj("proj=latlong");
+	$projInObj = ms_newprojectionobj($projection);
+	$clonePoint->project($projInObj, $projOutObj);
+	$dict['mapx'] = round($clonePoint->x,4);
+	$dict['mapy'] = round($clonePoint->y,4);
+} else {
+	$dict['mapx'] = round($point->x,4);
+	$dict['mapy'] = round($point->y,4);
+}
+	
+#Set header/footer
 $headerArray = file($CONFIGURATION['identify_header']);
+$headerContents = implode('', $headerArray);
+$content = processTemplate($headerContents, $dict) . $content;
 $footerArray = file($CONFIGURATION['identify_footer']);
-
-$contents = implode('', array_merge($headerArray, array($content)));
-$footer_contents = implode('', $footerArray);
-
-header('Content-type: application/xml');
-print "<results>";
-print "<script>";
-print " GeoMOOSE.clearLayerParameters('highlight');";
-print " GeoMOOSE.turnLayerOff('highlight/highlight');";
-print "</script>";
-print "<html><![CDATA[";
-print processTemplate($contents, $substArray);
-print "]]></html>";
-print "<footer><![CDATA[";
-print processTemplate($footer_contents, $substArray);
-print "]]></footer>";
-print "</results>";
+$footerContents = implode('', $footerArray);
+$content = $content . processTemplate($footerContents, $dict);
+		
+$dict['results'] = $content;
+$dict['queryShape'] = $queryShape;
+$dict['foundShapesArray'] = $foundShapes;
+$dict["fileName"] = basename(__FILE__, '.php');
+	
+# Get the type of query to return
+switch(strtoupper(get_request_icase('type'))) {
+	case "WMSDATABASE":
+		outputDatabase($dict, "WMS");
+		break;
+	case "WFS":
+		outputDatabase($dict, "WFS");
+		break;
+	case "WMSMEMORY":
+		outputMemory($dict);
+		break;
+	case "HTML":
+	default:
+		outputHTML($dict);
+		break;
+}
 ?>

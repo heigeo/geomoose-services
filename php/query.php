@@ -19,21 +19,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.*/
 
-#
-# GeoMOOSE Query Service
-# (c) 2009-2012 Dan "Ducky" Little
-#
+/*
+ * GeoMOOSE 2 Query Service
+ */
 
-include('config.php');
-
-$DEBUG = false;
-
-$LATLONG_PROJ = ms_newprojectionobj('epsg:4326');
-
-# Turn off the warning reporting
-if(!$DEBUG) {
-	error_reporting(E_ERROR | E_PARSE);
-}
+include('output.php');
 
 class Comparitor {
 	protected $p = array();
@@ -50,7 +40,6 @@ class Comparitor {
 	public function toSQL($field_name, $value) {
 		return sprintf($this->p['sql'], $field_name, $value);
 	}
-
 }
 
 class Operator {
@@ -66,7 +55,7 @@ class Operator {
 		return sprintf($this->ms_format, $v);
 	}
 
-	public function toSQL($v) { 
+	public function toSQL($v) {
 		return sprintf($this->sql_format, $v);
 	}
 }
@@ -133,7 +122,7 @@ $operators['nor'] = new Operator('OR (NOT (%s))', 'or not (%s)');
 
 class Predicate {
 	protected $self = array();
-	
+
 	/*
 	 * field_name = Field Name to search
 	 * value = value to test against
@@ -167,18 +156,7 @@ class Predicate {
 	}
 }
 
-
 $predicates = array();
-
-# the mode!
-$mode = get_request_icase('mode');
-if(!isset($mode)) {
-	if(get_request_icase('service') == 'WMS') {
-		$mode = 'map';
-	}
-}
-$highlightResults = parseBoolean(get_request_icase('highlight'));
-$zoomToFirst = parseBoolean(get_request_icase('zoom_to_first'));
 
 # layers to search
 $query_layers = array();
@@ -196,14 +174,13 @@ if($DEBUG) {
 # get set of predicates
 # I've only allowed for 255 right now... people will have to deal with this
 for($i = 0; $i < 255; $i++) {
-#	if(array_key_exists('operator'.$i, $_REQUEST) and $_REQUEST['operator'.$i] != NULL or $i == 0) {
 	if(isset_icase('operator'.$i) or get_request_icase('operator'.$i) != NULL or $i == 0) {
 		# see if the layer is different
 		$layer = $query_layers[0];
 		if(isset_icase('layer'.$i)) {
 			$layer = get_request_icase('layer'.$i);
 		}
-		
+
 		$template = $query_templates[0];
 		if(isset_icase('template'.$i)) {
 			$template = get_request_icase('template'.$i);
@@ -235,7 +212,6 @@ for($i = 0; $i < 255; $i++) {
 			$blank_okay = false;
 		}
 
-
 		# if a value is not set for subsequent inputs, use the first input
 		# this allows queries to permeate across multiple layers
 		if(isset_icase('value'.$i)) {
@@ -243,7 +219,6 @@ for($i = 0; $i < 255; $i++) {
 			$p = new Predicate($layer, get_request_icase('fieldname'.$i), $value, $operator, $comparitor, $blank_okay);
 			$predicates[] = $p;
 		}
-
 	}
 }
 
@@ -262,7 +237,6 @@ $msXML = $mapbook->getElementsByTagName('map-source');
 # content stores the HTML results
 $content = '';
 $totalResults = 0;
-$firstResult = false;
 
 # store the features so we can render a map later
 $resultFeatures = array();
@@ -273,7 +247,6 @@ $SQL_LAYER_TYPES = array(MS_POSTGIS, MS_ORACLESPATIAL);
 $NOT_SUPPORTED = array(MS_INLINE, MS_SDE, MS_WMS, MS_WFS, MS_GRATICULE, MS_RASTER, MS_PLUGIN, MS_OGR);
 
 for($la = 0; $la < sizeof($query_layers); $la++) {
-
 	# get the layer.
 	for($map_source_i = 0; $map_source_i < $msXML->length; $map_source_i++) {
 		$node = $msXML->item($map_source_i);
@@ -325,187 +298,105 @@ for($la = 0; $la < sizeof($query_layers); $la++) {
 					}
 
 					$queryLayer->set('status', MS_DEFAULT);
-
-					if($queryLayer->getMetadata('itemquery_header')) {
-						$queryLayer->set('header', $queryLayer->getMetadata('itemquery_header'));
-					}
-					if($queryLayer->getMetadata('itemquery_footer')) {
-						$queryLayer->set('footer', $queryLayer->getMetadata('itemquery_footer'));
-					}
-					# we no long need to delineate between handling of SQL and Shapefile type layers.
+					
 					if($filter_string) {
-						# WARNING! This will clobber existing filters on a layer.  
+						# WARNING! This will clobber existing filters on a layer.
 						if($is_sql) {
 							$queryLayer->setFilter($filter_string);
 						} else {
 							$queryLayer->setFilter('('.$filter_string.')');
 						}
-
-					}
+					}		
+					$selectMap = explode("/", str_replace("./","",$file), -1);
+					$selectMap = implode("/", $selectMap);
+					$template = implode('', file($selectMap . "/" . $queryLayer->getMetadata($query_templates[$la])));
+					
 					$queryLayer->set('template', $queryLayer->getMetaData($query_templates[$la]));
-
+					$results = "";
+					
 					$ext = $queryLayer->getExtent();
 					if($DEBUG) {
 						error_log(implode(',', array($ext->minx,$ext->miny,$ext->maxx,$ext->maxy)));
 						error_log("<br/>extent'd.<br/>");
 					}
-					#$queryLayer->setFilter($filter_string);
-					#$queryLayer->set('filteritem', 'PARC_CODE');
-					#$queryLayer->setFilter('1');
-					#$queryLayer->setFilter('[PARC_CODE] == 1');
-					#$queryLayer->queryByRect($queryLayer->getExtent());
-					#$queryLayer->whichShapes($queryLayer->getExtent());
-					#$queryLayer->whichShapes($ext);
-
 
 					$queryLayer->open();
-					if($DEBUG) { error_log('queryLayer opened'); }
 					$queryLayer->queryByRect($ext);
-					if($DEBUG) { error_log('queryLayer queried'); }
-
+					$results = $map->processQueryTemplate(array(), false);
+					
 					$numResults = 0;
 
-					$projection = $map->getProjection();
+					$projectionMap = $map->getProjection();
 					if($queryLayer->getProjection() != NULL) {
-						$projection = $queryLayer->getProjection();
+						$projectionMap = $queryLayer->getProjection();
 					}
-					if($projection != NULL) {
+					if($projectionMap != NULL) {
 						# reproject the query shape as available.
-						$projection = ms_newProjectionObj($projection);
+						$projectionMap = ms_newProjectionObj($projectionMap);
 					}
-	
-					for($i = 0; $i < $queryLayer->getNumResults(); $i++) {	
+					
+					for($i = 0; $i < $queryLayer->getNumResults(); $i++) {
 						$shape = $queryLayer->getShape($queryLayer->getResult($i));
-						if($projection) {
-							$shape->project($projection, $LATLONG_PROJ);
+						if($projectionMap) {
+							$shape->project($projectionMap, ms_newprojectionobj($projection));
+						} else {
+							$shape->project($LATLONG_PROJ, ms_newprojectionobj($projection));
 						}
-						$resultFeatures[] = $shape;
 						$numResults += 1;
+						$shape->set("text", $i);
+						$resultFeatures[] = $shape;
+						$results = internalIdTemplate($results, $i, $template);
 					}
-					if($DEBUG) { error_log('queryLayer iterated through.'); }
 
 					$totalResults += $numResults;
-					if($DEBUG) {
-						error_log('Total Results: '.$numResults);
+					if($DEBUG) { error_log('Total Results: '.$numResults); }
+					
+					#Set header/footer
+					if($queryLayer->getMetadata('itemquery_header')) {
+						$queryLayer->set('header', $queryLayer->getMetadata('itemquery_header'));
+						$headerArray = implode('', file($selectMap . "/" . $queryLayer->getMetadata('itemquery_header')));
+						$results = processTemplate($headerArray, $dict) . $results;
 					}
-
-					if($DEBUG) { error_log('qLayer finished'); }
-
-					$map->queryByRect($ext);
-					$results = $map->processquerytemplate(array(), MS_FALSE);
+					if($queryLayer->getMetadata('itemquery_footer')) {
+						$queryLayer->set('footer', $queryLayer->getMetadata('itemquery_footer'));
+						$footerArray = implode('', file($selectMap . "/" . $queryLayer->getMetadata('itemquery_footer')));
+						$results = $results . processTemplate($footerArray, $dict);
+					}
+					
 					if($DEBUG) { error_log('Results from MS: '.$results); }
 					$content = $content . $results;
 				}
 			}
 		}
 	}
-
 }
 
-# 
-# Didn't find any results
-# so we're going to just say, "I found nothing" to the user and quit.
-#
-if($totalResults == 0) {
-	header('Content-type: text/xml');
-	print '<results><html><![CDATA[';
-	print implode('', file($CONFIGURATION['query_miss']));
-	print ']]></html></results>';
-	exit(0);
+# Array to hold values needed inside output and map file
+$dict = array();
+$dict['UNIQUEID'] = 'select_'.getmypid().time();
+$dict['SHAPEPATH'] = $CONFIGURATION['temp'];
+$dict['PROJECTION'] = 'EPSG:4326'; 
+$dict['foundShapes'] = $totalResults;
+$content = processTemplate($content, $dict);
+$dict['MAP_PROJECTION'] = $projection; 
+$dict['results'] = $content;
+$dict['foundShapesArray'] = $resultFeatures;
+$dict["fileName"] = basename(__FILE__, '.php');
+	
+# Get the type of query to return
+switch(strtoupper(urldecode($_REQUEST['type']))) {
+	case "WMSDATABASE":
+		outputDatabase($dict, "WMS");
+		break;
+	case "WFS":
+		outputDatabase($dict, "WFS");
+		break;
+	case "HTML":
+		outputHTML($dict);
+		break;
+	case "WMSMEMORY":
+	default:
+		outputMemory($dict);
+		break;
 }
-
-if($mode == 'search') {
-	header('Content-type: text/xml');
-	print "<results n='".$totalResults."'>";
-	print "<script><![CDATA[";
-	$qlayers = implode(':', $query_layers);
-	print "GeoMOOSE.turnLayerOn('$qlayers');\n";
-
-	if($highlightResults) {
-		print "GeoMOOSE.changeLayerUrl('highlight', './php/query.php');";
-		$partial_params = array();
-		foreach($_REQUEST as $p => $v) {
-			if($p != 'mode') {
-				array_push($partial_params, sprintf("'%s' : '%s'", $p, urldecode($v)));
-			}
-		}
-		$partial_params[] = "'TRANSPARENT' : 'true'";
-		$partial_params[] = "'FORMAT' : 'image/png'";
-		$partial_params[] = "'LAYERS' : 'highlight'";
-		print "GeoMOOSE.clearLayerParameters('highlight');";
-		print "GeoMOOSE.updateLayerParameters('highlight', {".implode(',',$partial_params)."});";
-		print "GeoMOOSE.turnLayerOn('highlight/highlight');";
-		print "GeoMOOSE.refreshLayers('highlight/highlight');";
-	}
-
-	# If there is only one results ... zoom to it!
-	# or zoom to the first result if requested.
-	if(($totalResults == 1 and $firstResult != false) or ($totalResults >= 1 and $zoomToFirst == true)) {
-		$bounds = $firstResult->bounds;
-		printf('GeoMOOSE.zoomToExtent(%f,%f,%f,%f);', $bounds->minx, $bounds->miny, $bounds->maxx, $bounds->maxy);
-	}
-	print "]]></script>";
-	print "<html><![CDATA[";
-
-	if(!array_key_exists('query_header', $CONFIGURATION) or $CONFIGURATION['query_header'] == NULL) {
-		$CONFIGURATION['query_header'] = $CONFIGURATION['itemquery_header'];
-	}
-
-	if(!array_key_exists('query_footer', $CONFIGURATION) or $CONFIGURATION['query_footer'] == NULL) {
-		$CONFIGURATION['query_footer'] = $CONFIGURATION['itemquery_footer'];
-	}
-
-	$headerArray = file($CONFIGURATION['query_header']);
-	$footerArray = file($CONFIGURATION['query_footer']);
-	$contents = implode('', array_merge($headerArray, array($content), $footerArray));
-	print $contents;
-
-	print "]]></html>";
-	print "</results>";
-} elseif($mode == 'map') {
-	$path = '';
-
-	$dict = array();
-	$mapfile = implode('', file($path.'itemquery/highlight.map'));
-	$mapfile = processTemplate($mapfile, $dict);
-
-	$highlight_map = ms_newMapObjFromString($mapfile); 
-	$polygonsLayer = $highlight_map->getLayerByName('polygons');
-	$pointsLayer = $highlight_map->getLayerByName('points');
-	$linesLayer = $highlight_map->getLayerByName('lines');
-
-	$poly_features = '';
-
-	for($i = 0; $i < sizeof($resultFeatures); $i++) {
-		if($resultFeatures[$i]->type == MS_SHAPE_POINT) {
-			$pointsLayer->addFeature($resultFeatures[$i]);
-		} elseif($resultFeatures[$i]->type == MS_SHAPE_POLYGON) {
-			$polygonsLayer->addFeature($resultFeatures[$i]);
-		} elseif($resultFeatures[$i]->type == MS_SHAPE_LINE) {
-			$linesLayer->addFeature($resultFeatures[$i]);
-		}
-	}
-
-	# get the WMS parameters.
-	$request = ms_newowsrequestobj();
-	$request->loadparams();
-
-	# handle the wms request
-	ms_ioinstallstdouttobuffer();
-
-	$highlight_map->owsdispatch($request);
-	$contenttype = ms_iostripstdoutbuffercontenttype();
-
-	# put the image out to the stdout with the content-type attached
-	header('Content-type: '.$contenttype);
-	ms_iogetStdoutBufferBytes();
-	ms_ioresethandlers();
-} else if($mode == 'results') {
-	header("Content-type: text/plain");
-	print $content;
-} else {
-	header('Content-type: text/html');
-	print '<html><body>Error! Unknown mode!</body></html>';
-}
-
 ?>

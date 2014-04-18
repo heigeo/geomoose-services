@@ -270,6 +270,23 @@ function processTemplate($str, $dict) {
 }
 
 #
+# Method: internalIdTemplate
+# Get the number of internal ids per template and replace in the results
+#
+# Parameters:
+#  $results - The template results
+#  $id - The first id to replace
+#  $template - The template of one result
+#
+# Returns:
+#  Template results with correct id
+#
+function internalIdTemplate($results, $id, $template) {
+	$ct = substr_count($template, "[geomoose_id]"); 
+	return preg_replace('/\[geomoose_id\]/', $id, $results, $ct);
+}
+
+#
 # Method: parseBoolean
 # Parses a string for a boolean value.
 #
