@@ -30,12 +30,12 @@ $shape = get_request_icase('shape');
 
 # Set up the list of potential layers to identify
 if (get_request_icase('visible_layers') != "") {
-	$visibleLayers = get_request_icase('visible_layers');
+	$visibleLayers = urldecode(get_request_icase('visible_layers'));
 } else {
-	$visibleLayers = get_request_icase('layers');
+	$visibleLayers = urldecode(get_request_icase('layers'));
 }
 
-$hiddenLayers = get_request_icase('hidden_layers');
+$hiddenLayers = urldecode(get_request_icase('hidden_layers'));
 $layersList = explode(':', $visibleLayers);
 $layersList = array_merge($layersList, explode(':', $hiddenLayers));
 $layersList = array_unique($layersList);
@@ -253,7 +253,7 @@ $headerContents = implode('', $headerArray);
 $content = processTemplate($headerContents, $dict) . $content;
 $footerArray = file($CONFIGURATION['identify_footer']);
 $footerContents = implode('', $footerArray);
-$content = $content . processTemplate($footerContents, $dict);
+$dict['footer'] = processTemplate($footerContents, $dict);
 		
 $dict['results'] = $content;
 $dict['queryShape'] = $queryShape;
@@ -261,7 +261,7 @@ $dict['foundShapesArray'] = $foundShapes;
 $dict["fileName"] = basename(__FILE__, '.php');
 	
 # Get the type of query to return
-switch(strtoupper(get_request_icase('type'))) {
+switch(strtoupper(urldecode(get_request_icase('type')))) {
 	case "WMSDATABASE":
 		outputDatabase($dict, "WMS");
 		break;

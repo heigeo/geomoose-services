@@ -160,12 +160,12 @@ $predicates = array();
 
 # layers to search
 $query_layers = array();
-$query_layers[0] = get_request_icase('layer0');
+$query_layers[0] = urldecode(get_request_icase('layer0'));
 
 # this will check to see which template format should be used
 # query/itemquery/select/popup/etc.
 $query_templates = array();
-$query_templates[0] = get_request_icase('template0');
+$query_templates[0] = urldecode(get_request_icase('template0'));
 
 if($DEBUG) {
 	error_log("Got parameters.<br/>");
@@ -174,16 +174,16 @@ if($DEBUG) {
 # get set of predicates
 # I've only allowed for 255 right now... people will have to deal with this
 for($i = 0; $i < 255; $i++) {
-	if(isset_icase('operator'.$i) or get_request_icase('operator'.$i) != NULL or $i == 0) {
+	if(isset_icase('operator'.$i) or urldecode(get_request_icase('operator'.$i)) != NULL or $i == 0) {
 		# see if the layer is different
 		$layer = $query_layers[0];
 		if(isset_icase('layer'.$i)) {
-			$layer = get_request_icase('layer'.$i);
+			$layer = urldecode(get_request_icase('layer'.$i));
 		}
 
 		$template = $query_templates[0];
 		if(isset_icase('template'.$i)) {
-			$template = get_request_icase('template'.$i);
+			$template = urldecode(get_request_icase('template'.$i));
 		}
 
 		if(!in_array($layer, $query_layers) and $i > 0) {
@@ -195,20 +195,20 @@ for($i = 0; $i < 255; $i++) {
 
 		if($i == 0) {
 			$operator = $operators['init'];
-		} else if(isset_icase('operator'.$i) and $operators[get_request_icase('operator'.$i)]) {
-			$operator = $operators[get_request_icase('operator'.$i)];
+		} else if(isset_icase('operator'.$i) and $operators[urldecode(get_request_icase('operator'.$i))]) {
+			$operator = $operators[urldecode(get_request_icase('operator'.$i))];
 		} else {
 			# return error saying no valid operator found
 		}
 
-		if(isset_icase('comparitor'.$i) and $comparitors[get_request_icase('comparitor'.$i)]) {
-			$comparitor = $comparitors[get_request_icase('comparitor'.$i)];
+		if(isset_icase('comparitor'.$i) and $comparitors[urldecode(get_request_icase('comparitor'.$i))]) {
+			$comparitor = $comparitors[urldecode(get_request_icase('comparitor'.$i))];
 		} else {
 			# return error saying there is no valid comparitor
 		}
 
 		$blank_okay = true;
-		if(isset_icase('blanks'.$i) and strtolower(get_request_icase('blanks'.$i)) == 'false') {
+		if(isset_icase('blanks'.$i) and strtolower(urldecode(get_request_icase('blanks'.$i))) == 'false') {
 			$blank_okay = false;
 		}
 
@@ -216,7 +216,7 @@ for($i = 0; $i < 255; $i++) {
 		# this allows queries to permeate across multiple layers
 		if(isset_icase('value'.$i)) {
 			$value = urldecode(get_request_icase('value'.$i));
-			$p = new Predicate($layer, get_request_icase('fieldname'.$i), $value, $operator, $comparitor, $blank_okay);
+			$p = new Predicate($layer, urldecode(get_request_icase('fieldname'.$i)), $value, $operator, $comparitor, $blank_okay);
 			$predicates[] = $p;
 		}
 	}
@@ -360,7 +360,7 @@ for($la = 0; $la < sizeof($query_layers); $la++) {
 					if($queryLayer->getMetadata('itemquery_footer')) {
 						$queryLayer->set('footer', $queryLayer->getMetadata('itemquery_footer'));
 						$footerArray = implode('', file($selectMap . "/" . $queryLayer->getMetadata('itemquery_footer')));
-						$results = $results . processTemplate($footerArray, $dict);
+						$footer = processTemplate($footerArray, $dict);
 					}
 					
 					if($DEBUG) { error_log('Results from MS: '.$results); }
@@ -380,11 +380,12 @@ $dict['foundShapes'] = $totalResults;
 $content = processTemplate($content, $dict);
 $dict['MAP_PROJECTION'] = $projection; 
 $dict['results'] = $content;
+$dict['footer'] = $footer;
 $dict['foundShapesArray'] = $resultFeatures;
 $dict["fileName"] = basename(__FILE__, '.php');
 	
 # Get the type of query to return
-switch(strtoupper(urldecode($_REQUEST['type']))) {
+switch(strtoupper(urldecode(get_request_icase('type')))) {
 	case "WMSDATABASE":
 		outputDatabase($dict, "WMS");
 		break;

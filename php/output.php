@@ -179,7 +179,11 @@ function outputDatabase($dict, $type) {
 	print "]]></script>";
 	print "<html><![CDATA[";
 	print processTemplate($dict['results'], $dict);
-	print "]]></html></results>";
+	print "]]></html>";
+	print "<footer><![CDATA[";
+	print $dict['footer'];
+	print "]]></footer>";
+	print "</results>";
 }
 
 function outputHTML($dict) {
@@ -192,7 +196,11 @@ function outputHTML($dict) {
 	print "]]></script>";
 	print "<html><![CDATA[";
 	print processTemplate($dict['results'], $dict);
-	print "]]></html></results>";
+	print "]]></html>";
+	print "<footer><![CDATA[";
+	print $dict['footer'];
+	print "]]></footer>";
+	print "</results>";
 }
 
 function outputMemory($dict) {
@@ -250,6 +258,9 @@ function outputMemory($dict) {
 		print "<html><![CDATA[";
 		print $dict['results'];
 		print "]]></html>";
+		print "<footer><![CDATA[";
+		print $dict['footer'];
+		print "]]></footer>";
 		print "</results>";
 	} else if($mode == 'map') {
 		# Remove from dictionary (messes with templates)

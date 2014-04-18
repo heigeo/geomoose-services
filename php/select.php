@@ -30,23 +30,23 @@ include('output.php');
 # "shape_buffer" is a buffer of the input shapes. 
 $shape_buffer = 0;
 if(array_key_exists('shape_buffer', $_REQUEST) and isset($_REQUEST['shape_buffer'])) {
-	$shape_buffer = get_request_icase('shape_buffer');
+	$shape_buffer = urldecode(get_request_icase('shape_buffer'));
 }
 	
 # "selection_buffer" is a buffer the shapes selected by shape + shape_buffer
 $selection_buffer = 0;
 if(array_key_exists('selection_buffer', $_REQUEST) and isset($_REQUEST['selection_buffer'])) {
-	$selection_buffer = get_request_icase('selection_buffer');
+	$selection_buffer = urldecode(get_request_icase('selection_buffer'));
 }
 
 # Get the Query Shape
-$shape_wkt = get_request_icase('shape');
+$shape_wkt = urldecode(get_request_icase('shape'));
 
 # This is the layer where shapes are selected from
-$selectLayer = get_request_icase('select_layer');
+$selectLayer = urldecode(get_request_icase('select_layer'));
 
 # This is the layer from where feature information is queried
-$queryLayer = get_request_icase('query_layer');
+$queryLayer = urldecode(get_request_icase('query_layer'));
 
 # Load the mapbook
 $mapbook = getMapbook();
@@ -203,7 +203,7 @@ if($layer->getMetadata('select_header')) {
 if($layer->getMetadata('select_footer')) {
 	$layer->set('footer', $layer->getMetadata('select_footer'));
 	$footerArray = implode('', file($CONFIGURATION['root'] . $selectMap . "/" . $layer->getMetadata('select_footer')));
-	$results = $results . processTemplate($footerArray, $dict);
+	$dict['footer'] = processTemplate($footerArray, $dict);
 }
 $selectShape->project($LATLONG_PROJ, ms_newprojectionobj($projection));
 $dict['queryShape'] = $selectShape;
@@ -221,7 +221,7 @@ $dict['results'] = $results;
 $dict["fileName"] = basename(__FILE__, '.php');
 
 # Get the type of query to return
-switch(strtoupper(get_request_icase('type'))) {
+switch(strtoupper(urldecode(get_request_icase('type')))) {
 	case "WFS":
 		outputDatabase($dict, "WFS");
 		break;

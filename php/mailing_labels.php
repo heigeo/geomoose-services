@@ -37,6 +37,10 @@ $query_id = urldecode($_REQUEST['queryid']);
 $output = urldecode($_REQUEST['output']);
 if(!isset($output)) { $output = 'html'; }
 
+$qValue = json_decode(urldecode($_REQUEST['qstring']),true);
+$queryItem = urldecode($_REQUEST['qitem']);
+$layersToSearch = explode(':', urldecode($_REQUEST['qlayers']));
+
 # get some config
 $tempDirectory = $CONFIGURATION['temp'];
 
@@ -51,16 +55,73 @@ for($i = 1; $i <= $labelLines; $i++) {
 	array_push($lineTemplate, $CONFIGURATION['label_line_'.$i]);
 }
 
-# connect to the sqlite db
-$sqlite = new PDO('sqlite:'.$tempDirectory.'/'.$query_id.'.db');
+$mapbook = getMapbook();
+$msXML = $mapbook->getElementsByTagName('map-source');
 
+# Array to store the popups found.
+$content = '';
+$totalResults = 0;
+$firstResult = false;
+
+$resultFeatures = array();
+
+for($i = 0; $i < $msXML->length; $i++) {
+	$node = $msXML->item($i);
+	$layers = $node->getElementsByTagName('layer');
+	for($l = 0; $l < $layers->length; $l++) {
+		$layer = $layers->item($l);
+		$layerName = $layer->getAttribute('name');
+		$path = $node->getAttribute('name').'/'.$layerName;
+		if(in_array($path, $layersToSearch)) {
+			$file = $node->getElementsByTagName('file')->item(0)->firstChild->nodeValue;
+			# Okay, now it's time to cook
+			if(substr($file,0,1) == '.') {
+				$file = $CONFIGURATION['root'].$file;
+			}
+			$map = ms_newMapObj($file);
+
+			# Create an array of query layers
+			$queryLayers = array();
+			if($layerName == 'all') {
+				for($ml = 0; $ml < $map->numlayers; $ml++) {
+					array_push($queryLayers, $map->getLayer($ml));
+				}
+			} else {
+				# Turn on the specific layer
+				array_push($queryLayers, $map->getLayerByName($layerName));
+			}
+
+			# Iterate through the queryLayers...
+			foreach($queryLayers as $queryLayer) {
+				foreach($qValue as $queryValue) {
+					$queryLayer->set('template', 'dummy.html');
+					$queryLayer->set('status', MS_DEFAULT);
+					$queryLayer->set('filteritem', $queryItem);
+					$queryLayer->setFilter($queryValue);
+					$queryLayer->queryByRect($queryLayer->getExtent());
+
+					$queryLayer->open();
+					$numResults = $queryLayer->getNumResults();
+					for($rx = 0; $rx < $numResults; $rx++) {
+						$res = $queryLayer->getShape($queryLayer->getResult($rx));
+						array_push($resultFeatures, $res);
+					}	
+				}
+				$queryLayer->close();
+			}
+		}
+	}
+}
+
+$numRecords = sizeof($resultFeatures);
 # put the labels into a larger array
 $allAddresses = array();
 
 # this is added to support a more elaborate CSV format
 $csv_addresses = array();
 
-foreach ($sqlite->query('select * from features') as $rec) {
+for($i = 0; $i < $numRecords; $i++) {
+	$rec = $resultFeatures[$i]->values;
 	$address = array();
 	for($line = 0; $line < $labelLines; $line++) {
 		$address[$line] = $lineTemplate[$line];
@@ -88,11 +149,11 @@ if($output == 'html') {
 	$i = 0;
 	$column = 0;
 	$row = 0;
-	while($i < sizeof($csv_addresses)) {
+	while($i < $numRecords) {
 		if($row == 0 and $column == 0) {
 			print "<table>";
 		}
-		if($column == 0) {	
+		if($column == 0) {
 			print "<tr>";
 		}
 
